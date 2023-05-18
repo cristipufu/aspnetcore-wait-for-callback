@@ -4,11 +4,11 @@ namespace WaitForCallback.Controllers
 {
     [ApiController]
     [Route("[controller]")]
-    public class TaskController : ControllerBase
+    public class TasksController : ControllerBase
     {
         private static readonly Dictionary<Guid, TaskRequest> PendingTasks = new();
 
-        public TaskController() { }
+        public TasksController() { }
 
         [HttpPost("Create")]
         public async Task<ActionResult> Create()
@@ -27,6 +27,8 @@ namespace WaitForCallback.Controllers
                     HttpContext.RequestAborted,
                     request.TimeoutCancellationTokenSource.Token);
 
+            PendingTasks.Add(newTaskId, request);
+
             if (request.CancellationTokenSource.Token.CanBeCanceled)
             {
                 request.CancellationTokenRegistration = request.CancellationTokenSource.Token.Register(static obj =>
@@ -41,8 +43,6 @@ namespace WaitForCallback.Controllers
 
                 }, request);
             }
-
-            PendingTasks.Add(newTaskId, request);
 
             // Do deferred work in the background.
             // We assume once the task completes, the worker will call the [POST]Task/Complete API.
@@ -84,7 +84,7 @@ namespace WaitForCallback.Controllers
             await Task.Delay(5000);
 
             var httpClient = new HttpClient();
-            var request = new HttpRequestMessage(HttpMethod.Post, $"https://localhost:7038/Task/Complete/{taskId}");
+            var request = new HttpRequestMessage(HttpMethod.Post, $"https://localhost:7038/Tasks/Complete/{taskId}");
 
             await httpClient.SendAsync(request);
         }
