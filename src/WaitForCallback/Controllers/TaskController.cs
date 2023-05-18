@@ -17,17 +17,27 @@ namespace WaitForCallback.Controllers
 
             TaskRequest request = new()
             {
-                CancellationToken = HttpContext.RequestAborted,
+                TaskId = newTaskId,
+                TimeoutCancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10)), // wait max 10 seconds
                 TaskCompletionSource = new TaskCompletionSource<Guid>(),
             };
 
-            if (request.CancellationToken.CanBeCanceled)
+            // Wait until caller cancels or timeout expires
+            request.CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(
+                    HttpContext.RequestAborted,
+                    request.TimeoutCancellationTokenSource.Token);
+
+            if (request.CancellationTokenSource.Token.CanBeCanceled)
             {
-                request.CancellationTokenRegistration = request.CancellationToken.Register(static obj =>
+                request.CancellationTokenRegistration = request.CancellationTokenSource.Token.Register(static obj =>
                 {
                     // When the request gets canceled
                     var request = (TaskRequest)obj!;
-                    request.TaskCompletionSource!.TrySetCanceled(request.CancellationToken);
+                    request.TaskCompletionSource!.TrySetCanceled(request.CancellationTokenSource!.Token);
+
+                    PendingTasks.Remove(request.TaskId);
+
+                    request.Dispose();
 
                 }, request);
             }
@@ -36,7 +46,7 @@ namespace WaitForCallback.Controllers
 
             // Do deferred work in the background.
             // We assume once the task completes, the worker will call the [POST]Task/Complete API.
-            await RunAsync(newTaskId);
+            _ = RunAsync(newTaskId);
             
             return Ok(await request.TaskCompletionSource.Task);
         }
@@ -44,7 +54,10 @@ namespace WaitForCallback.Controllers
         [HttpPost("Complete/{taskId}")]
         public ActionResult Complete(Guid taskId)
         {
-            var request = PendingTasks[taskId];
+            if (!PendingTasks.TryGetValue(taskId, out var request))
+            {
+                return Ok();
+            }
 
             if (!request.TaskCompletionSource!.Task.IsCompleted) 
             {
@@ -59,7 +72,7 @@ namespace WaitForCallback.Controllers
                 // The request was canceled while pending
             }
 
-            request.CancellationTokenRegistration.Dispose();
+            request.Dispose();
 
             PendingTasks.Remove(taskId);
 
@@ -76,13 +89,24 @@ namespace WaitForCallback.Controllers
             await httpClient.SendAsync(request);
         }
 
-        private record TaskRequest
+        private record TaskRequest : IDisposable
         {
-            public CancellationToken CancellationToken { get; set; }
+            public Guid TaskId { get; set; }
+
+            public CancellationTokenSource? TimeoutCancellationTokenSource { get; set; }
+
+            public CancellationTokenSource? CancellationTokenSource { get; set; }
 
             public TaskCompletionSource<Guid>? TaskCompletionSource { get; set; }
 
             public CancellationTokenRegistration CancellationTokenRegistration { get; set; }
+
+            public void Dispose()
+            {
+                TimeoutCancellationTokenSource?.Dispose();
+                CancellationTokenSource?.Dispose();
+                CancellationTokenRegistration.Dispose();
+            }
         }
     }
 }
