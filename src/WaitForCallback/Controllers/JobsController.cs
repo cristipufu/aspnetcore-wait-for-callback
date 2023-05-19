@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using System.Text;
 using WaitForCallback.Infrastructure;
 using WaitForCallback.Models;
 
@@ -18,18 +20,16 @@ namespace WaitForCallback.Controllers
         [HttpPost("Start")]
         public async Task<ActionResult> Start([FromBody]StartJobModel settings)
         {
-            var newJobId = Guid.NewGuid();
-
-            // Do deferred work in the background.
-            // We assume once the task completes, the worker will call the [POST]Jobs/Complete API.
-            _ = RunAsync(newJobId);
-
             var pendingJob = new JobModel
             {
-                Id = newJobId,
+                Id = Guid.NewGuid(),
                 Status = "pending",
                 Timestamp = DateTime.UtcNow,
             };
+
+            // Do deferred work in the background.
+            // We assume once the task completes, the worker will call the [POST]Jobs/Complete API.
+            _ = RunAsync(pendingJob);
 
             if (!settings.WaitForResponse)
             {
@@ -38,34 +38,24 @@ namespace WaitForCallback.Controllers
 
             var request = await _requestsQueue.EnqueueRequestAsync(new RequestPayload<JobModel>
             {
-                Key = newJobId,
+                Key = pendingJob.Id,
                 Payload = pendingJob,
             }, TimeSpan.FromSeconds(settings.WaitForTimeoutSeconds), HttpContext.RequestAborted);
 
-            var completedJob = request.Payload;
-
-            if (completedJob?.CompletedTimestamp != null)
-            {
-                pendingJob.CompletedTimestamp = completedJob.CompletedTimestamp;
-                pendingJob.Duration = completedJob.CompletedTimestamp - pendingJob.Timestamp;
-                pendingJob.Status = completedJob.Status;
-            }
-
-            return Ok(pendingJob);
+            return Ok(request.Payload);
         }
 
-        [HttpPost("Complete/{jobId}")]
-        public async Task<ActionResult> Complete(Guid jobId)
+        [HttpPost("Complete")]
+        public async Task<ActionResult> Complete([FromBody]JobModel job)
         {
+            job.Status = "completed";
+            job.CompletedTimestamp = DateTime.UtcNow;
+            job.Duration = job.CompletedTimestamp - job.Timestamp;
+
             var request = new RequestPayload<JobModel>
             {
-                Key = jobId,
-                Payload = new JobModel
-                {
-                    Id = jobId,
-                    Status = "completed",
-                    CompletedTimestamp = DateTime.UtcNow,
-                },
+                Key = job.Id,
+                Payload = job,
             };
 
             await _requestsQueue.DequeueRequestAsync(request);
@@ -73,12 +63,16 @@ namespace WaitForCallback.Controllers
             return Ok();
         }
 
-        private static async Task RunAsync(Guid jobId)
+        private static async Task RunAsync(JobModel job)
         {
             await Task.Delay(5000);
 
             var httpClient = new HttpClient();
-            var request = new HttpRequestMessage(HttpMethod.Post, $"https://localhost:7038/Jobs/Complete/{jobId}");
+
+            var request = new HttpRequestMessage(HttpMethod.Post, "https://localhost:7038/Jobs/Complete")
+            {
+                Content = new StringContent(JsonConvert.SerializeObject(job), Encoding.UTF8, "application/json")
+            };
 
             await httpClient.SendAsync(request);
         }

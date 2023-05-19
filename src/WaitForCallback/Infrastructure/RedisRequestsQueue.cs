@@ -34,6 +34,7 @@ namespace WaitForCallback.Infrastructure
 
         public async Task DequeueRequestAsync(RequestPayload<T> payload)
         {
+            // Start request was made on the same node.
             if (_requestsQueue.PendingRequests.ContainsKey(payload.Key))
             {
                 await _requestsQueue.DequeueRequestAsync(payload);
@@ -41,6 +42,8 @@ namespace WaitForCallback.Infrastructure
                 return;
             }
 
+            // Start request was initially made on another node.
+            // Broadcast completion to other nodes.
             var pubSub = _connectionMultiplexer.GetSubscriber();
 
             await pubSub.PublishAsync(Channel, new RedisValue(JsonConvert.SerializeObject(payload)));
