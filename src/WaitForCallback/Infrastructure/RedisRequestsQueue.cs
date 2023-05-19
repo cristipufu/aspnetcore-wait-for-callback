@@ -27,9 +27,9 @@ namespace WaitForCallback.Infrastructure
             });
         }
 
-        public Task<RequestPayload> EnqueueRequestAsync(RequestPayload payload, CancellationToken cancellationToken)
+        public Task<RequestPayload<T>> EnqueueRequestAsync<T>(RequestPayload<T> payload, TimeSpan waitForTimeout, CancellationToken cancellationToken)
         {
-            return _requestsQueue.EnqueueRequestAsync(payload, cancellationToken);
+            return _requestsQueue.EnqueueRequestAsync(payload, waitForTimeout, cancellationToken);
         }
 
         public async Task DequeueRequestAsync(RequestPayload payload)

@@ -6,17 +6,14 @@ namespace WaitForCallback.Infrastructure
     {
         public ConcurrentDictionary<Guid, DefferedRequest> PendingRequests = new();
 
-        public RequestsQueue()
-        {
+        public RequestsQueue() { }
 
-        }
-
-        public virtual Task<RequestPayload> EnqueueRequestAsync(RequestPayload payload, CancellationToken cancellationToken)
+        public virtual async Task<RequestPayload<T>> EnqueueRequestAsync<T>(RequestPayload<T> payload, TimeSpan waitForTimeout, CancellationToken cancellationToken)
         {
             DefferedRequest request = new()
             {
                 Payload = payload,
-                TimeoutCancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10)), // wait max 10 seconds
+                TimeoutCancellationTokenSource = new CancellationTokenSource(waitForTimeout), // wait max 10 seconds
                 TaskCompletionSource = new TaskCompletionSource<RequestPayload>(),
             };
 
@@ -33,7 +30,16 @@ namespace WaitForCallback.Infrastructure
                 {
                     // When the request gets canceled
                     var request = (DefferedRequest)obj!;
-                    request.TaskCompletionSource!.TrySetCanceled(request.CancellationTokenSource!.Token);
+
+                    if (request.TimeoutCancellationTokenSource!.IsCancellationRequested)
+                    {
+                        request.TaskCompletionSource!.TrySetResult(request.Payload!);
+                    }
+                    else
+                    {
+                        // Canceled by caller
+                        request.TaskCompletionSource!.TrySetCanceled(request.CancellationTokenSource!.Token);
+                    }
 
                     PendingRequests.TryRemove(request.Payload!.Key, out var _);
 
@@ -42,7 +48,9 @@ namespace WaitForCallback.Infrastructure
                 }, request);
             }
 
-            return request.TaskCompletionSource.Task;
+            var response = await request.TaskCompletionSource.Task;
+
+            return (RequestPayload<T>)response;
         }
 
         public virtual Task DequeueRequestAsync(RequestPayload payload)

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json;
 using WaitForCallback.Infrastructure;
+using WaitForCallback.Models;
 
 namespace WaitForCallback.Controllers
 {
@@ -16,7 +16,7 @@ namespace WaitForCallback.Controllers
         }
 
         [HttpPost("Start")]
-        public async Task<ActionResult> Start()
+        public async Task<ActionResult> Start([FromBody]StartJobModel settings)
         {
             var newJobId = Guid.NewGuid();
 
@@ -31,14 +31,20 @@ namespace WaitForCallback.Controllers
                 Timestamp = DateTime.UtcNow,
             };
 
-            var request = await _requestsQueue.EnqueueRequestAsync(new RequestPayload
+            if (!settings.WaitForResponse)
+            {
+                return Ok(pendingJob);
+            }
+
+            var request = await _requestsQueue.EnqueueRequestAsync(new RequestPayload<JobModel>
             {
                 Key = newJobId,
-            }, HttpContext.RequestAborted);
+                Payload = pendingJob,
+            }, TimeSpan.FromSeconds(settings.WaitForTimeoutSeconds), HttpContext.RequestAborted);
 
-            var completedJob = request.GetPayload<JobModel>();
+            var completedJob = request.Payload;
 
-            if (completedJob != null)
+            if (completedJob?.CompletedTimestamp != null)
             {
                 pendingJob.CompletedTimestamp = completedJob.CompletedTimestamp;
                 pendingJob.Duration = completedJob.CompletedTimestamp - pendingJob.Timestamp;
@@ -51,17 +57,16 @@ namespace WaitForCallback.Controllers
         [HttpPost("Complete/{jobId}")]
         public async Task<ActionResult> Complete(Guid jobId)
         {
-            var request = new RequestPayload
+            var request = new RequestPayload<JobModel>
             {
                 Key = jobId,
+                Payload = new JobModel
+                {
+                    Id = jobId,
+                    Status = "completed",
+                    CompletedTimestamp = DateTime.UtcNow,
+                },
             };
-
-            request.SetPayload(new JobModel
-            {
-                Id = jobId,
-                Status = "completed",
-                CompletedTimestamp = DateTime.UtcNow,
-            });
 
             await _requestsQueue.DequeueRequestAsync(request);
 

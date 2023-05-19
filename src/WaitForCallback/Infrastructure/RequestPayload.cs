@@ -23,4 +23,22 @@ namespace WaitForCallback.Infrastructure
             return JsonConvert.DeserializeObject<T>(Data);
         }
     }
+
+    public class RequestPayload<T> : RequestPayload
+    {
+        public T? Payload
+        {
+            get
+            {
+                return GetPayload<T>();
+            }
+            set
+            {
+                if (value != null)
+                {
+                    SetPayload(value);
+                }
+            }
+        }
+    }
 }

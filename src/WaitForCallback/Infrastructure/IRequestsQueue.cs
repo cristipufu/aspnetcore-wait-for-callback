@@ -2,7 +2,7 @@
 {
     public interface IRequestsQueue
     {
-        Task<RequestPayload> EnqueueRequestAsync(RequestPayload payload, CancellationToken cancellationToken);
+        Task<RequestPayload<T>> EnqueueRequestAsync<T>(RequestPayload<T> payload, TimeSpan waitForTimeout, CancellationToken cancellationToken);
 
         Task DequeueRequestAsync(RequestPayload payload);
     }

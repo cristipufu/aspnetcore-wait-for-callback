@@ -1,4 +1,4 @@
-﻿namespace WaitForCallback.Controllers
+﻿namespace WaitForCallback.Models
 {
     public class JobModel
     {
