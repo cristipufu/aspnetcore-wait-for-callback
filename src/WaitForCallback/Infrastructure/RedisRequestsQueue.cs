@@ -1,4 +1,5 @@
-﻿using StackExchange.Redis;
+﻿using Newtonsoft.Json;
+using StackExchange.Redis;
 
 namespace WaitForCallback.Infrastructure
 {
@@ -20,9 +21,9 @@ namespace WaitForCallback.Infrastructure
 
             pubSub.Subscribe(Channel).OnMessage(async (channelMsg) =>
             {
-                var key = Guid.Parse(channelMsg.Message!);
+                var request = JsonConvert.DeserializeObject<RequestPayload>(channelMsg.Message!);
 
-                await _requestsQueue.DequeueRequestAsync(key);
+                await _requestsQueue.DequeueRequestAsync(request!);
             });
         }
 
@@ -31,18 +32,18 @@ namespace WaitForCallback.Infrastructure
             return _requestsQueue.EnqueueRequestAsync(payload, cancellationToken);
         }
 
-        public async Task DequeueRequestAsync(Guid key)
+        public async Task DequeueRequestAsync(RequestPayload payload)
         {
-            if (_requestsQueue.PendingRequests.ContainsKey(key))
+            if (_requestsQueue.PendingRequests.ContainsKey(payload.Key))
             {
-                await _requestsQueue.DequeueRequestAsync(key);
+                await _requestsQueue.DequeueRequestAsync(payload);
 
                 return;
             }
 
             var pubSub = _connectionMultiplexer.GetSubscriber();
 
-            await pubSub.PublishAsync(Channel, new RedisValue(key.ToString()));
+            await pubSub.PublishAsync(Channel, new RedisValue(JsonConvert.SerializeObject(payload)));
         }
     }
 }

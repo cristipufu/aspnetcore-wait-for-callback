@@ -4,6 +4,6 @@
     {
         Task<RequestPayload> EnqueueRequestAsync(RequestPayload payload, CancellationToken cancellationToken);
 
-        Task DequeueRequestAsync(Guid key);
+        Task DequeueRequestAsync(RequestPayload payload);
     }
 }

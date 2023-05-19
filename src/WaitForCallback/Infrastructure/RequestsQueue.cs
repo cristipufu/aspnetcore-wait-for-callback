@@ -45,9 +45,9 @@ namespace WaitForCallback.Infrastructure
             return request.TaskCompletionSource.Task;
         }
 
-        public virtual Task DequeueRequestAsync(Guid key)
+        public virtual Task DequeueRequestAsync(RequestPayload payload)
         {
-            if (!PendingRequests.TryRemove(key, out var request))
+            if (!PendingRequests.TryRemove(payload.Key, out var request))
             {
                 return Task.CompletedTask;
             }
@@ -55,7 +55,7 @@ namespace WaitForCallback.Infrastructure
             if (!request.TaskCompletionSource!.Task.IsCompleted)
             {
                 // Try to complete the task 
-                if (request.TaskCompletionSource?.TrySetResult(request.Payload!) == false)
+                if (request.TaskCompletionSource?.TrySetResult(payload) == false)
                 {
                     // The request was canceled
                 }

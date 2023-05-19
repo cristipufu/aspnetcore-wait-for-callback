@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
 using WaitForCallback.Infrastructure;
 
 namespace WaitForCallback.Controllers
@@ -23,24 +24,46 @@ namespace WaitForCallback.Controllers
             // We assume once the task completes, the worker will call the [POST]Jobs/Complete API.
             _ = RunAsync(newJobId);
 
-            var requestPayload = await _requestsQueue.EnqueueRequestAsync(new RequestPayload<JobModel>
+            var pendingJob = new JobModel
+            {
+                Id = newJobId,
+                Status = "pending",
+                Timestamp = DateTime.UtcNow,
+            };
+
+            var request = await _requestsQueue.EnqueueRequestAsync(new RequestPayload
             {
                 Key = newJobId,
-                Data = new JobModel
-                {
-                    Id = newJobId,
-                    Status = "completed",
-                    Timestamp = DateTime.UtcNow,
-                },
             }, HttpContext.RequestAborted);
 
-            return Ok(((RequestPayload<JobModel>)requestPayload).Data);
+            var completedJob = request.GetPayload<JobModel>();
+
+            if (completedJob != null)
+            {
+                pendingJob.CompletedTimestamp = completedJob.CompletedTimestamp;
+                pendingJob.Duration = completedJob.CompletedTimestamp - pendingJob.Timestamp;
+                pendingJob.Status = completedJob.Status;
+            }
+
+            return Ok(pendingJob);
         }
 
         [HttpPost("Complete/{jobId}")]
         public async Task<ActionResult> Complete(Guid jobId)
         {
-            await _requestsQueue.DequeueRequestAsync(jobId);
+            var request = new RequestPayload
+            {
+                Key = jobId,
+            };
+
+            request.SetPayload(new JobModel
+            {
+                Id = jobId,
+                Status = "completed",
+                CompletedTimestamp = DateTime.UtcNow,
+            });
+
+            await _requestsQueue.DequeueRequestAsync(request);
 
             return Ok();
         }
