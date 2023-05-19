@@ -1,8 +1,10 @@
-﻿namespace WaitForCallback.Infrastructure
+﻿using System.Collections.Concurrent;
+
+namespace WaitForCallback.Infrastructure
 {
     public class RequestsQueue : IRequestsQueue
     {
-        public Dictionary<Guid, DefferedRequest> PendingRequests = new();
+        public ConcurrentDictionary<Guid, DefferedRequest> PendingRequests = new();
 
         public RequestsQueue()
         {
@@ -23,7 +25,7 @@
                     cancellationToken,
                     request.TimeoutCancellationTokenSource.Token);
 
-            PendingRequests.Add(request.Payload.Key, request);
+            PendingRequests.TryAdd(request.Payload.Key, request);
 
             if (request.CancellationTokenSource.Token.CanBeCanceled)
             {
@@ -33,7 +35,7 @@
                     var request = (DefferedRequest)obj!;
                     request.TaskCompletionSource!.TrySetCanceled(request.CancellationTokenSource!.Token);
 
-                    PendingRequests.Remove(request.Payload!.Key);
+                    PendingRequests.TryRemove(request.Payload!.Key, out var _);
 
                     request.Dispose();
 
@@ -45,7 +47,7 @@
 
         public virtual Task DequeueRequestAsync(Guid key)
         {
-            if (!PendingRequests.TryGetValue(key, out var request))
+            if (!PendingRequests.TryRemove(key, out var request))
             {
                 return Task.CompletedTask;
             }
@@ -64,8 +66,6 @@
             }
 
             request.Dispose();
-
-            PendingRequests.Remove(key);
 
             return Task.CompletedTask;
         }

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using System.Collections.Concurrent;
 
 namespace WaitForCallback.Controllers
 {
@@ -6,7 +7,7 @@ namespace WaitForCallback.Controllers
     [Route("[controller]")]
     public class TasksController : ControllerBase
     {
-        private static readonly Dictionary<Guid, TaskRequest> PendingTasks = new();
+        private static readonly ConcurrentDictionary<Guid, TaskRequest> PendingTasks = new();
 
         public TasksController() { }
 
@@ -27,7 +28,7 @@ namespace WaitForCallback.Controllers
                     HttpContext.RequestAborted,
                     request.TimeoutCancellationTokenSource.Token);
 
-            PendingTasks.Add(newTaskId, request);
+            PendingTasks.TryAdd(newTaskId, request);
 
             if (request.CancellationTokenSource.Token.CanBeCanceled)
             {
@@ -37,7 +38,7 @@ namespace WaitForCallback.Controllers
                     var request = (TaskRequest)obj!;
                     request.TaskCompletionSource!.TrySetCanceled(request.CancellationTokenSource!.Token);
 
-                    PendingTasks.Remove(request.TaskId);
+                    PendingTasks.TryRemove(request.TaskId, out var _);
 
                     request.Dispose();
 
@@ -54,7 +55,7 @@ namespace WaitForCallback.Controllers
         [HttpPost("Complete/{taskId}")]
         public ActionResult Complete(Guid taskId)
         {
-            if (!PendingTasks.TryGetValue(taskId, out var request))
+            if (!PendingTasks.TryRemove(taskId, out var request))
             {
                 return Ok();
             }
@@ -73,8 +74,6 @@ namespace WaitForCallback.Controllers
             }
 
             request.Dispose();
-
-            PendingTasks.Remove(taskId);
 
             return Ok();
         }
