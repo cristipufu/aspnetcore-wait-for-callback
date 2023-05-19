@@ -2,19 +2,19 @@
 
 namespace WaitForCallback.Infrastructure
 {
-    public class RequestsQueue : IRequestsQueue
+    public class RequestsQueue<T> : IRequestsQueue<T>
     {
-        public ConcurrentDictionary<Guid, DefferedRequest> PendingRequests = new();
+        public ConcurrentDictionary<Guid, DefferedRequest<T>> PendingRequests = new();
 
         public RequestsQueue() { }
 
-        public virtual async Task<RequestPayload<T>> EnqueueRequestAsync<T>(RequestPayload<T> payload, TimeSpan waitForTimeout, CancellationToken cancellationToken)
+        public virtual Task<RequestPayload<T>> EnqueueRequestAsync(RequestPayload<T> payload, TimeSpan waitForTimeout, CancellationToken cancellationToken)
         {
-            DefferedRequest request = new()
+            DefferedRequest<T> request = new()
             {
                 Payload = payload,
                 TimeoutCancellationTokenSource = new CancellationTokenSource(waitForTimeout), // wait max 10 seconds
-                TaskCompletionSource = new TaskCompletionSource<RequestPayload>(),
+                TaskCompletionSource = new TaskCompletionSource<RequestPayload<T>>(),
             };
 
             // Wait until caller cancels or timeout expires
@@ -29,7 +29,7 @@ namespace WaitForCallback.Infrastructure
                 request.CancellationTokenRegistration = request.CancellationTokenSource.Token.Register(obj =>
                 {
                     // When the request gets canceled
-                    var request = (DefferedRequest)obj!;
+                    var request = (DefferedRequest<T>)obj!;
 
                     if (request.TimeoutCancellationTokenSource!.IsCancellationRequested)
                     {
@@ -48,12 +48,10 @@ namespace WaitForCallback.Infrastructure
                 }, request);
             }
 
-            var response = await request.TaskCompletionSource.Task;
-
-            return (RequestPayload<T>)response;
+            return request.TaskCompletionSource.Task;
         }
 
-        public virtual Task DequeueRequestAsync(RequestPayload payload)
+        public virtual Task DequeueRequestAsync(RequestPayload<T> payload)
         {
             if (!PendingRequests.TryRemove(payload.Key, out var request))
             {

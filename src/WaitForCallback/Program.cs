@@ -1,10 +1,11 @@
 using StackExchange.Redis;
 using WaitForCallback.Infrastructure;
+using WaitForCallback.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddSingleton<IRequestsQueue, RequestsQueue>();
+builder.Services.AddSingleton<IRequestsQueue<JobModel>, RequestsQueue<JobModel>>();
 
 /* Multi-node with Redis PubSub
  *
@@ -12,7 +13,7 @@ var redisOptions = ConfigurationOptions.Parse(builder.Configuration.GetConnectio
 var connectionMultiplexer = ConnectionMultiplexer.Connect(redisOptions);
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp => connectionMultiplexer);
 
-builder.Services.AddSingleton<IRequestsQueue, RedisRequestsQueue>();
+builder.Services.AddSingleton<IRequestsQueue<JobModel>, RedisRequestsQueu<JobModel>>();
 */
 
 // Web Api

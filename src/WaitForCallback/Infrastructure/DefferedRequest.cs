@@ -1,10 +1,10 @@
 ﻿namespace WaitForCallback.Infrastructure
 {
-    public class DefferedRequest : IDisposable
+    public class DefferedRequest<T> : IDisposable
     {
-        public RequestPayload? Payload { get; set; }
+        public RequestPayload<T>? Payload { get; set; }
 
-        public TaskCompletionSource<RequestPayload>? TaskCompletionSource { get; set; }
+        public TaskCompletionSource<RequestPayload<T>>? TaskCompletionSource { get; set; }
 
         public CancellationTokenSource? TimeoutCancellationTokenSource { get; set; }
 

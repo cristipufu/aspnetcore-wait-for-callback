@@ -3,17 +3,17 @@ using StackExchange.Redis;
 
 namespace WaitForCallback.Infrastructure
 {
-    public class RedisRequestsQueue : IRequestsQueue
+    public class RedisRequestsQueue<T> : IRequestsQueue<T>
     {
         private const string Channel = "deffered-requests-channel";
 
         private readonly IConnectionMultiplexer _connectionMultiplexer;
 
-        private readonly RequestsQueue _requestsQueue;
+        private readonly RequestsQueue<T> _requestsQueue;
 
         public RedisRequestsQueue(IConnectionMultiplexer connectionMultiplexer)
         {
-            _requestsQueue = new RequestsQueue();
+            _requestsQueue = new RequestsQueue<T>();
 
             _connectionMultiplexer = connectionMultiplexer;
 
@@ -21,18 +21,18 @@ namespace WaitForCallback.Infrastructure
 
             pubSub.Subscribe(Channel).OnMessage(async (channelMsg) =>
             {
-                var request = JsonConvert.DeserializeObject<RequestPayload>(channelMsg.Message!);
+                var request = JsonConvert.DeserializeObject<RequestPayload<T>>(channelMsg.Message!);
 
                 await _requestsQueue.DequeueRequestAsync(request!);
             });
         }
 
-        public Task<RequestPayload<T>> EnqueueRequestAsync<T>(RequestPayload<T> payload, TimeSpan waitForTimeout, CancellationToken cancellationToken)
+        public Task<RequestPayload<T>> EnqueueRequestAsync(RequestPayload<T> payload, TimeSpan waitForTimeout, CancellationToken cancellationToken)
         {
             return _requestsQueue.EnqueueRequestAsync(payload, waitForTimeout, cancellationToken);
         }
 
-        public async Task DequeueRequestAsync(RequestPayload payload)
+        public async Task DequeueRequestAsync(RequestPayload<T> payload)
         {
             if (_requestsQueue.PendingRequests.ContainsKey(payload.Key))
             {

@@ -1,9 +1,9 @@
 ﻿namespace WaitForCallback.Infrastructure
 {
-    public interface IRequestsQueue
+    public interface IRequestsQueue<T>
     {
-        Task<RequestPayload<T>> EnqueueRequestAsync<T>(RequestPayload<T> payload, TimeSpan waitForTimeout, CancellationToken cancellationToken);
+        Task<RequestPayload<T>> EnqueueRequestAsync(RequestPayload<T> payload, TimeSpan waitForTimeout, CancellationToken cancellationToken);
 
-        Task DequeueRequestAsync(RequestPayload payload);
+        Task DequeueRequestAsync(RequestPayload<T> payload);
     }
 }

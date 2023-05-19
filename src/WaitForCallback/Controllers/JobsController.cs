@@ -8,9 +8,9 @@ namespace WaitForCallback.Controllers
     [Route("[controller]")]
     public class JobsController : ControllerBase
     {
-        private readonly IRequestsQueue _requestsQueue;
+        private readonly IRequestsQueue<JobModel> _requestsQueue;
 
-        public JobsController(IRequestsQueue requestsQueue)
+        public JobsController(IRequestsQueue<JobModel> requestsQueue)
         {
             _requestsQueue = requestsQueue;
         }
